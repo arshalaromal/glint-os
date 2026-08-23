@@ -1,0 +1,1 @@
+qemu-system-x86_64 -m 2G -drive if=pflash,format=raw,readonly=on,file=edk2-x86_64-code.fd -drive format=raw,file=fat:rw:disk_image
