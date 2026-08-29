@@ -5,8 +5,12 @@ edition = "2024"
 
 [dependencies]
 embedded-graphics = { version = "0.8.2", features = ["defmt"] }
+lazy_static = { version = "1.5.0", features = ["spin_no_std"] }
 limine = "0.6.5"
+pic8259 = "0.11.0"
 profont = "0.7.0"
+spin = "0.12.3"
+x86_64 = "0.15.5"
 
 [profile.dev]
 panic = "abort"

@@ -2,17 +2,11 @@
 #![no_main]
 
 mod vga;
+mod gdt; 
 
 use core::panic::PanicInfo;
+use core::fmt::Write;
 use limine::request::FramebufferRequest;
-
-use embedded_graphics::{
-    mono_font::MonoTextStyle,
-    pixelcolor::Rgb888,
-    prelude::*,
-    text::Text,
-};
-use profont::PROFONT_18_POINT;
 
 static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
 
@@ -29,36 +23,40 @@ pub extern "C" fn _start() -> ! {
                 fb.bpp as usize,
             );
 
-            // Clear the screen
-            display.clear(Rgb888::new(15, 18, 24)).unwrap();
+            display.clear_screen();
 
-            // Define font styles with distinct colors
-            let style_title  = MonoTextStyle::new(&PROFONT_18_POINT, Rgb888::new(0, 229, 255)); // Bright Cyan
-            let style_sub    = MonoTextStyle::new(&PROFONT_18_POINT, Rgb888::new(140, 150, 170)); // Slate Grey
-            let style_ok     = MonoTextStyle::new(&PROFONT_18_POINT, Rgb888::new(0, 230, 118)); // Neon Green
-            let style_warn   = MonoTextStyle::new(&PROFONT_18_POINT, Rgb888::new(255, 171, 0));   // Amber Gold
-            let style_body   = MonoTextStyle::new(&PROFONT_18_POINT, Rgb888::new(240, 244, 248)); // Crisp White
+           
+            display.color = [0, 255, 255];
+            let _ = write!(display, "GLINT OS v0.1.0\n");
+            let _ = write!(display, "================================================\n\n");
 
-            // Draw Header Banner
-            Text::new("GLINT KERNEL v0.1.0", Point::new(30, 45), style_title)
-                .draw(&mut display)
-                .unwrap();
+            display.color = [0, 255, 0];
+            let _ = write!(display, "[ OK ] Limine Bootloader Handshaked\n");
+            let _ = write!(display, "[ OK ] Framebuffer Mapped at {:p}\n", fb.address() as *const u8);
+            
+            // Initialize Architecture
+            gdt::init();
+            let _ = write!(display, "[ OK ] Global Descriptor Table (GDT) Loaded\n");
+            let _ = write!(display, "[ OK ] Task State Segment (TSS) Activated\n");
+
+            display.color = [255, 200, 0]; 
+            let _ = write!(display, "\n[WAIT] Interrupt Descriptor Table (IDT) pending...\n");
+            let _ = write!(display, "[WAIT] PIC Remapping pending...\n");
+
+            display.color = [255, 255, 255];
+            let _ = write!(display, "\nhalted.\n");
         }
     }
 
     loop {
-        halt_cpu();
-    }
-}
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {
-        halt_cpu();
+        // Keep CPU at 0%
+        unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)); }
     }
 }
 
-pub fn halt_cpu() {
-    unsafe {
-        core::arch::asm!("hlt", options(nomem, nostack, preserves_flags));
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {
+        unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)); }
     }
 }
