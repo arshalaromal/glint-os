@@ -7,6 +7,7 @@ edition = "2024"
 embedded-graphics = { version = "0.8.2", features = ["defmt"] }
 lazy_static = { version = "1.5.0", features = ["spin_no_std"] }
 limine = "0.6.5"
+pc-keyboard = "0.9.0"
 pic8259 = "0.11.0"
 profont = "0.7.0"
 spin = "0.12.3"

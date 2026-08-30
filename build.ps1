@@ -1,7 +1,8 @@
-# 1. Compile the kernel for bare-metal x86_64
+# 1. Compile the kernel
 cargo build
 
-# 2. Automatically copy the compiled binary into the disk_image root
+# 2. Copy the binary
 Copy-Item "target/x86_64-unknown-none/debug/glint_os" "disk_image/glint_os" -Force
 
-Write-Host "Glint OS built and copied to disk_image successfully!" -ForegroundColor Green
+wsl xorriso -as mkisofs -b limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table -o glint_os.iso disk_image
+
