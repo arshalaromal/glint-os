@@ -1,11 +1,26 @@
 #![no_std]
 #![no_main]
+#![feature(abi_x86_interrupt)]
 
-mod vga;
-mod gdt; 
+pub mod arch {
+    pub mod gdt;
+    pub mod interrupts;
+    pub mod time;
+}
+
+pub mod drivers {
+    pub mod vga;
+    pub mod rtc;
+    pub mod speaker;
+}
+
+pub mod splash;
+pub mod shell; 
+pub mod commands;
 
 use core::panic::PanicInfo;
 use core::fmt::Write;
+use core::sync::atomic::Ordering;
 use limine::request::FramebufferRequest;
 
 static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
@@ -15,48 +30,65 @@ pub extern "C" fn _start() -> ! {
     if let Some(response) = FRAMEBUFFER_REQUEST.response() {
         if let Some(fb) = response.framebuffers().first() {
             
-            let mut display = vga::Writer::new(
-                fb.address() as *mut u8,
-                fb.width as usize,
-                fb.height as usize,
-                fb.pitch as usize,
-                fb.bpp as usize,
+            let mut display = drivers::vga::Writer::new(
+                fb.address() as *mut u8, fb.width as usize,
+                fb.height as usize, fb.pitch as usize, fb.bpp as usize,
             );
+        arch::gdt::init();
+        arch::interrupts::init();
+        arch::time::init_pit();
 
-            display.clear_screen();
+        x86_64::instructions::interrupts::enable();
+        
+        crate::splash::run(&mut display);
+        
+        display.clear_screen();
 
-           
-            display.color = [0, 255, 255];
-            let _ = write!(display, "GLINT OS v0.1.0\n");
-            let _ = write!(display, "================================================\n\n");
+        display.color = [0, 255, 0]; 
+        let _ = write!(display, "> ");
+        display.color = [255, 255, 255];
 
-            display.color = [0, 255, 0];
-            let _ = write!(display, "[ OK ] Limine Bootloader Handshaked\n");
-            let _ = write!(display, "[ OK ] Framebuffer Mapped at {:p}\n", fb.address() as *const u8);
-            
-            // Initialize Architecture
-            gdt::init();
-            let _ = write!(display, "[ OK ] Global Descriptor Table (GDT) Loaded\n");
-            let _ = write!(display, "[ OK ] Task State Segment (TSS) Activated\n");
+            // Boot the Shell
+            let mut shell = shell::Shell::new();
 
-            display.color = [255, 200, 0]; 
-            let _ = write!(display, "\n[WAIT] Interrupt Descriptor Table (IDT) pending...\n");
-            let _ = write!(display, "[WAIT] PIC Remapping pending...\n");
+            //0% CPU Event Loop
+            loop {
+                // Check if the keyboard interrupt
+                let key = arch::interrupts::LAST_KEY.swap(0, Ordering::Relaxed);
+                
+                if key != 0 {
+                    shell.handle_scancode(key, &mut display);
+                }
 
-            display.color = [255, 255, 255];
-            let _ = write!(display, "\nhalted.\n");
+                // Sleep the CPU until the next Timer tick or Keyboard press
+                unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)); }
+            }
         }
     }
 
-    loop {
-        // Keep CPU at 0%
-        unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)); }
+    // Fallback if Limine fails to provide framebuffer
+    loop { 
+        unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)); } 
     }
 }
 
+//Debugging & Auto-Reboot Panic Handler
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {
-        unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)); }
+fn panic(info: &PanicInfo) -> ! {
+    // Write crash log to QEMU's background terminal via the Serial Port (0x3F8)
+    struct SerialPort;
+    impl core::fmt::Write for SerialPort {
+        fn write_str(&mut self, s: &str) -> core::fmt::Result {
+            let mut port = x86_64::instructions::port::Port::<u8>::new(0x3F8);
+            for byte in s.bytes() { unsafe { port.write(byte); } }
+            Ok(())
+        }
     }
+    
+    let _ = writeln!(SerialPort, "\n\n*** GLINT OS KERNEL PANIC ***\n{}\n", info);
+    
+    // Pulse the PS/2 reset line to physically reboot the computer
+    unsafe { x86_64::instructions::port::Port::<u8>::new(0x64).write(0xFE); }
+    
+    loop { unsafe { core::arch::asm!("hlt"); } }
 }

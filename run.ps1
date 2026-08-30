@@ -1,1 +1,1 @@
-qemu-system-x86_64 -m 2G -serial stdio -cdrom glint_os.iso
+qemu-system-x86_64 -m 2G -serial stdio -audiodev sdl,id=snd0 -machine pcspk-audiodev=snd0 -cdrom glint_os.iso 
