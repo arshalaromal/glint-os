@@ -1,4 +1,7 @@
-# Glint OS
+<div align="center">
+  <img src="logo.png" alt="Logo">
+  <br><br>
+</div>
 
 Glint OS is a bare-metal, 64-bit operating system kernel written in Rust (`#![no_std]`) and booted via the Limine bootloader. 
 
