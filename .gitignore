@@ -1,2 +1,4 @@
 /target
 .vscode/
+*.iso
+disk_image/glint_os
